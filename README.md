@@ -1,6 +1,6 @@
 # NFA-converter
 
-Tool for converting nondeterministic finite automaton to deterministic finite automaton.
+Tool for converting nondeterministic finite automaton to deterministic finite automaton (DFA) / complete deterministic finite automaton (CDFA) / minimal CDFA.
 
 ***
 
@@ -64,4 +64,33 @@ automaton.to_dfa()
 automaton.to_cdfa()
 automaton.to_minimal_cdfa()
 print(automaton)
+```
+
+Example of input:
+```
+Alphabet: ab
+Number of edges: 3
+Edges:      (in format "{from} {to} {word}", symbol "-" stands for empty string)
+Edge #0: 0 1 -
+Edge #1: 1 1 ab
+Edge #2: 0 2 b
+Start state: 0
+Terminal states: 1 2
+```
+
+Example of output:
+```
+Automaton:
+    Edges:
+        From 0 to 4 by a
+        From 0 to 1 by b
+        From 4 to 4 by a
+        From 4 to 4 by b
+        From 1 to 0 by a
+        From 1 to 4 by b
+        From 2 to 0 by a
+        From 2 to 3 by b
+        From 3 to 4 by a
+        From 3 to 4 by b
+    Start state: 2    Terminal states: 1, 2, 3
 ```
