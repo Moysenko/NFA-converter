@@ -59,7 +59,7 @@ class Automaton:
         output += prefix + 'Terminal states: ' + ', '.join(str(v) for v in terminal_vertices) + '\n'
         return output
 
-    def _split_long_edges(self): # replaces all edges with keys longer than 1 with multiple edges
+    def _split_long_edges(self):  # replaces all edges with keys longer than 1 with multiple edges
         edges_to_delete = []
         for vertex_id in self.vertices:
             for word in self.__getitem__(vertex_id).edges:
@@ -80,7 +80,7 @@ class Automaton:
                     last_vertex = vertex_to
             self.__getitem__(vertex_id).remove_edge(word)
 
-    def _shorten_path(self, vertex_from, word, visited_vertices): # dfs in wich every step except first is using null edge
+    def _shorten_path(self, vertex_from, word, visited_vertices):  # dfs in wich every step except first is using null edge
         if word in vertex_from.edges:
             for vertex_to in vertex_from.edges[word]:
                 if vertex_to not in visited_vertices:
@@ -123,7 +123,7 @@ class Automaton:
                     self._reachable_from_vertex(self.__getitem__(vertex_to), visited)
 
     def _remove_duplicate_edges(self):
-        new_automaton = Automaton(start=0, vertices=dict(), alphabet=set())   # idk why should I create new instance like that
+        new_automaton = Automaton(start=0, vertices=dict(), alphabet=set())
         for subset in range(2**self._free_vertex_id):  # build automaton on subsets
             for vertex_id, vertex in self.vertices.items():
                 if (2**vertex_id) & subset:
@@ -159,7 +159,7 @@ class Automaton:
         self._remove_null_edges()
         self._remove_duplicate_edges()
 
-    def to_cdfa(self): # it is assumed that automaton is already deterministic
+    def to_cdfa(self):  # it is assumed that automaton is already deterministic
         missing_edges = []
         for vertex in self.vertices.values():
             missing_edges += [(vertex, letter) for letter in self.alphabet if letter not in vertex.edges]
@@ -206,7 +206,7 @@ class Automaton:
 
     def to_minimal_cdfa(self):
         group = self._equivalence_groups()
-        new_automaton = Automaton(start=group[self.start], alphabet=self.alphabet, vertices={})  # again idk
+        new_automaton = Automaton(start=group[self.start], alphabet=self.alphabet, vertices={})
         for vertex in self.vertices.values():
             new_automaton[group[vertex.id]].is_terminal |= vertex.is_terminal
             for word in self.alphabet:
