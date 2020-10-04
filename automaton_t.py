@@ -3,21 +3,21 @@ from collections import defaultdict
 
 
 class Automaton:
-    def __init__(self, start=0, free_vertex_id=0, vertices=dict(), alphabet={}, other_automaton=None):
+    def __init__(self, start=0, vertices=dict(), alphabet=set(), other_automaton=None):
         if other_automaton is None:
             self.start = start
-            self.free_vertex_id = free_vertex_id
+            self._free_vertex_id = (max(vertices) + 1) if len(vertices) else 0
             self.vertices = vertices
             self.alphabet = alphabet
         else:
             self.start = other_automaton.start
-            self.free_vertex_id = other_automaton.free_vertex_id
+            self._free_vertex_id = other_automaton._free_vertex_id
             self.vertices = dict(other_automaton.vertices)
             self.alphabet = other_automaton.alphabet.copy()
 
     def __getitem__(self, vertex_id):
         if vertex_id not in self.vertices:
-            self.free_vertex_id = max(self.free_vertex_id, vertex_id + 1)
+            self._free_vertex_id = max(self._free_vertex_id, vertex_id + 1)
             self.vertices[vertex_id] = Vertex(vertex_id)
         return self.vertices[vertex_id]
 
@@ -29,7 +29,9 @@ class Automaton:
         self.alphabet = set(input('Alphabet: '))
 
         number_of_edges = int(input('Number of edges: '))
-        print('Edges:      (in format "{from} {to} {word}")')
+        print('Edges:      (in format "{from} {to} {word}", symbol "-" stands for empty string)')
+        self.vertices = dict()
+        self._free_vertex_id = 0
         for edge_id in range(number_of_edges):
             vertex_from, vertex_to, word = input('Edge #{0}: '.format(edge_id)).split()
             if word == '-':  # null edge
@@ -71,8 +73,8 @@ class Automaton:
                     if i + 1 == len(word):
                         vertex_to = edge_end
                     else:
-                        vertex_to = self.free_vertex_id
-                        self.free_vertex_id += 1
+                        vertex_to = self._free_vertex_id
+                        self._free_vertex_id += 1
 
                     self.add_edge(last_vertex, vertex_to, letter)
                     last_vertex = vertex_to
@@ -121,8 +123,8 @@ class Automaton:
                     self._reachable_from_vertex(self.__getitem__(vertex_to), visited)
 
     def _remove_duplicate_edges(self):
-        new_automaton = Automaton(0, 0, dict(), {})   # idk why should I create new instance like that
-        for subset in range(2**self.free_vertex_id):  # build automaton on subsets
+        new_automaton = Automaton(start=0, vertices=dict(), alphabet=set())   # idk why should I create new instance like that
+        for subset in range(2**self._free_vertex_id):  # build automaton on subsets
             for vertex_id, vertex in self.vertices.items():
                 if (2**vertex_id) & subset:
                     if self.start == vertex_id and (2**vertex_id) == subset:
@@ -131,7 +133,7 @@ class Automaton:
                     for word in vertex.edges:
                         new_automaton[subset].edges[word] |= vertex.edges[word]
 
-        for subset in range(2**(self.free_vertex_id)):
+        for subset in range(2**(self._free_vertex_id)):
             for word in new_automaton[subset].edges:
                 subset_to = 0
                 for vertex in new_automaton[subset].edges[word]:
@@ -144,7 +146,7 @@ class Automaton:
                                 for new_vertex_id, old_vertex_id in enumerate(useful_vertices)}
 
         self.vertices = dict()
-        self.free_vertex_id = len(useful_vertices)
+        self._free_vertex_id = len(useful_vertices)
         self.start = new_useful_vertex_id[new_automaton.start]
         for vertex in useful_vertices:
             self.__getitem__(new_useful_vertex_id[vertex]).is_terminal |= new_automaton[vertex].is_terminal
@@ -163,19 +165,19 @@ class Automaton:
             missing_edges += [(vertex, letter) for letter in self.alphabet if letter not in vertex.edges]
 
         if missing_edges:
-            dummy_vertex = self.free_vertex_id
-            self.free_vertex_id += 1
+            dummy_vertex = self._free_vertex_id
+            self._free_vertex_id += 1
             for vertex_from, letter in missing_edges:
                 self.add_edge(vertex_from.id, dummy_vertex, letter)
             for letter in self.alphabet:
                 self.add_edge(dummy_vertex, dummy_vertex, letter)
-            self.free_vertex_id += 1
+            self._free_vertex_id += 1
 
     def reverse_cdfa(self):
         for vertex in self.vertices.values():
             vertex.is_terminal ^= 1
 
-    def equivalence_groups(self):
+    def _equivalence_groups(self):
         group = dict()
         for vertex in self.vertices.values():
             group[vertex.id] = int(vertex.is_terminal)
@@ -189,7 +191,7 @@ class Automaton:
 
             output_groups = defaultdict(list)
             for vertex in self.vertices.values():
-                key = tuple(group[vertex.go(letter)] for letter in self.alphabet)
+                key = tuple([group[vertex.id]] + [group[vertex.go(letter)] for letter in self.alphabet])
                 output_groups[key].append(vertex.id)
 
             old_number_of_classes = current_number_of_classes
@@ -203,8 +205,8 @@ class Automaton:
         return group
 
     def to_minimal_cdfa(self):
-        group = self.equivalence_groups()
-        new_automaton = Automaton(start=group[self.start], alphabet=self.alphabet, free_vertex_id=0, vertices={})  # idk
+        group = self._equivalence_groups()
+        new_automaton = Automaton(start=group[self.start], alphabet=self.alphabet, vertices={})  # again idk
         for vertex in self.vertices.values():
             new_automaton[group[vertex.id]].is_terminal |= vertex.is_terminal
             for word in self.alphabet:
