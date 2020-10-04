@@ -3,11 +3,17 @@ from collections import defaultdict
 
 
 class Automaton:
-    def __init__(self):
-        self.start = 0
-        self.free_vertex_id = 0
-        self.vertices = dict()
-        self.alphabet = {}
+    def __init__(self, start=0, free_vertex_id=0, vertices=dict(), alphabet={}, other_automaton=None):
+        if other_automaton is None:
+            self.start = start
+            self.free_vertex_id = free_vertex_id
+            self.vertices = vertices
+            self.alphabet = alphabet
+        else:
+            self.start = other_automaton.start
+            self.free_vertex_id = other_automaton.free_vertex_id
+            self.vertices = dict(other_automaton.vertices)
+            self.alphabet = other_automaton.alphabet.copy()
 
     def __getitem__(self, vertex_id):
         if vertex_id not in self.vertices:
@@ -20,7 +26,7 @@ class Automaton:
         self.__getitem__(vertex_from).add_edge(word, vertex_to)
 
     def scan(self):
-        self.alphabet = input('Alphabet: ')
+        self.alphabet = set(input('Alphabet: '))
 
         number_of_edges = int(input('Number of edges: '))
         print('Edges:      (in format "{from} {to} {word}")')
@@ -115,8 +121,8 @@ class Automaton:
                     self._reachable_from_vertex(self.__getitem__(vertex_to), visited)
 
     def _remove_duplicate_edges(self):
-        new_automaton = Automaton()
-        for subset in range(2**(self.free_vertex_id)):  # build automaton on subsets
+        new_automaton = Automaton(0, 0, dict(), {})   # idk why should I create new instance like that
+        for subset in range(2**self.free_vertex_id):  # build automaton on subsets
             for vertex_id, vertex in self.vertices.items():
                 if (2**vertex_id) & subset:
                     if self.start == vertex_id and (2**vertex_id) == subset:
@@ -169,9 +175,38 @@ class Automaton:
         for vertex in self.vertices.values():
             vertex.is_terminal ^= 1
 
-am = Automaton()
-am.scan()
-am.to_dfa()
-am.to_cdfa()
-am.reverse_cdfa()
-print(am)
+    def equivalence_groups(self):
+        group = dict()
+        for vertex in self.vertices.values():
+            group[vertex.id] = int(vertex.is_terminal)
+
+        old_number_of_classes = 1
+        current_number_of_classes = 2
+        step_id = 0
+
+        while old_number_of_classes != current_number_of_classes:
+            step_id += 1
+
+            output_groups = defaultdict(list)
+            for vertex in self.vertices.values():
+                key = tuple(group[vertex.go(letter)] for letter in self.alphabet)
+                output_groups[key].append(vertex.id)
+
+            old_number_of_classes = current_number_of_classes
+            current_number_of_classes = len(output_groups)
+
+            group = dict()
+            for group_id, vertices in enumerate(output_groups.values()):
+                for vertex in vertices:
+                    group[vertex] = group_id
+
+        return group
+
+    def to_minimal_cdfa(self):
+        group = self.equivalence_groups()
+        new_automaton = Automaton(start=group[self.start], alphabet=self.alphabet, free_vertex_id=0, vertices={})  # idk
+        for vertex in self.vertices.values():
+            new_automaton[group[vertex.id]].is_terminal |= vertex.is_terminal
+            for word in self.alphabet:
+                new_automaton.add_edge(group[vertex.id], group[vertex.go(word)], word)
+        self.__init__(other_automaton=new_automaton)

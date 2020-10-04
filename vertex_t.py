@@ -23,9 +23,9 @@ class Vertex:
         return self.edges[word]
 
     def go(self, word): # to make it convenient to step in DFA
-        if word not in edge:
+        if word not in self.edges:
             raise KeyError("Vertex {0} doesn't have edge with key {1}".
                            format(self.id, word))
-        return self.edges[word][0]
+        return list(self.edges[word])[0]
 
 
