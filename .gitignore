@@ -1,4 +1,5 @@
+htmlcov/
 __pycache__/
 .idea/
 tmp.py
-input.txt
+.coverage

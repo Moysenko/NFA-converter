@@ -1,14 +1,14 @@
 from vertex_t import Vertex
 from collections import defaultdict
-
+import sys, os
 
 class Automaton:
-    def __init__(self, start=0, vertices=dict(), alphabet=set(), other_automaton=None):
+    def __init__(self, start=0, vertices=None, alphabet=None, other_automaton=None):
         if other_automaton is None:
             self.start = start
-            self._free_vertex_id = (max(vertices) + 1) if len(vertices) else 0
-            self.vertices = vertices
-            self.alphabet = alphabet
+            self.vertices = vertices or dict()
+            self._free_vertex_id = (max(self.vertices) + 1) if len(self.vertices) else 0
+            self.alphabet = alphabet or set()
         else:
             self.start = other_automaton.start
             self._free_vertex_id = other_automaton._free_vertex_id
@@ -42,6 +42,14 @@ class Automaton:
         for terminal_vertex_id in list(map(int, input('Terminal states: ').split())):
             self.__getitem__(terminal_vertex_id).is_terminal = True
 
+    def read_from_file(self, filename):
+        with open(filename, 'r') as input_file, open(os.devnull, 'w') as output_file:
+            sys.stdin = input_file
+            sys.stdout = output_file
+            self.scan()
+            sys.stdin = sys.__stdin__
+            sys.stdout = sys.__stdout__
+
     def __str__(self):
         output = 'Automaton:\n'
         prefix = ' ' * 4
@@ -53,7 +61,7 @@ class Automaton:
                 terminal_vertices.append(vertex)
             for word, neighbors in self.__getitem__(vertex).edges.items():
                 for vertex_to in neighbors:
-                    output += prefix * 2 + 'From {0} to {1} by {2}\n'.format(vertex, vertex_to, word)
+                    output += prefix * 2 + 'From {0} to {1} by {2}\n'.format(vertex, vertex_to, word or '-')
 
         output += prefix + 'Start state: {0}'.format(self.start)
         output += prefix + 'Terminal states: ' + ', '.join(str(v) for v in terminal_vertices) + '\n'
@@ -158,6 +166,15 @@ class Automaton:
         self._split_long_edges()
         self._remove_null_edges()
         self._remove_duplicate_edges()
+
+    def accept_string(self, word):
+        current_state = self.start
+        for letter in word:
+            try:
+                current_state = self.__getitem__(current_state).go(letter)
+            except KeyError:
+                return False
+        return self.__getitem__(current_state).is_terminal
 
     def to_cdfa(self):  # it is assumed that automaton is already deterministic
         missing_edges = []

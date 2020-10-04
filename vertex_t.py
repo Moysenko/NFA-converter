@@ -7,15 +7,14 @@ class Vertex:
         self.id = vertex_id
         self.edges = defaultdict(set)
 
-    def __hash__(self):
-        return hash(self.id)
-
     def add_edge(self, word, vertex_to):
         self.edges[word].add(vertex_to)
 
     def remove_edge(self, word, vertex_to=None):
         if vertex_to is not None:
             self.edges[word].remove(vertex_to)
+            if len(self.edges[word]) == 0:
+                del self.edges[word]
         else:
             del self.edges[word]
 
