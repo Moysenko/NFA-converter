@@ -1,6 +1,7 @@
 from vertex_t import Vertex
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import sys, os
+import json
 
 class Automaton:
     def __init__(self, start=0, vertices=None, alphabet=None, other_automaton=None):
@@ -22,8 +23,8 @@ class Automaton:
         return self.vertices[vertex_id]
 
     def add_edge(self, vertex_from, vertex_to, word):
-        self.__getitem__(vertex_to)   # in order to add vertex_to in self.vertices
-        self.__getitem__(vertex_from).add_edge(word, vertex_to)
+        self[vertex_to]   # in order to add vertex_to in self.vertices
+        self[vertex_from].add_edge(word, vertex_to)
 
     def scan(self):
         self.alphabet = set(input('Alphabet: '))
@@ -40,9 +41,9 @@ class Automaton:
 
         self.start = int(input('Start state: '))
         for terminal_vertex_id in list(map(int, input('Terminal states: ').split())):
-            self.__getitem__(terminal_vertex_id).is_terminal = True
+            self[terminal_vertex_id].is_terminal = True
 
-    def read_from_file(self, filename):
+    def read_from_json(self, filename):
         with open(filename, 'r') as input_file, open(os.devnull, 'w') as output_file:
             sys.stdin = input_file
             sys.stdout = output_file
@@ -57,9 +58,9 @@ class Automaton:
         terminal_vertices = []
 
         for vertex in self.vertices:
-            if self.__getitem__(vertex).is_terminal:
+            if self[vertex].is_terminal:
                 terminal_vertices.append(vertex)
-            for word, neighbors in self.__getitem__(vertex).edges.items():
+            for word, neighbors in self[vertex].edges.items():
                 for vertex_to in neighbors:
                     output += prefix * 2 + 'From {0} to {1} by {2}\n'.format(vertex, vertex_to, word or '-')
 
@@ -70,12 +71,12 @@ class Automaton:
     def _split_long_edges(self):  # replaces all edges with keys longer than 1 with multiple edges
         edges_to_delete = []
         for vertex_id in self.vertices:
-            for word in self.__getitem__(vertex_id).edges:
+            for word in self[vertex_id].edges:
                 if word is not None and len(word) > 1:
                     edges_to_delete.append((vertex_id, word))
 
         for vertex_id, word in edges_to_delete:
-            for edge_end in self.__getitem__(vertex_id).neighbors_by_word(word):
+            for edge_end in self[vertex_id].neighbors_by_word(word):
                 last_vertex = vertex_id
                 for i, letter in enumerate(word):
                     if i + 1 == len(word):
@@ -86,23 +87,23 @@ class Automaton:
 
                     self.add_edge(last_vertex, vertex_to, letter)
                     last_vertex = vertex_to
-            self.__getitem__(vertex_id).remove_edge(word)
+            self[vertex_id].remove_edge(word)
 
     def _shorten_path(self, vertex_from, word, visited_vertices):  # dfs in wich every step except first is using null edge
         if word in vertex_from.edges:
             for vertex_to in vertex_from.edges[word]:
                 if vertex_to not in visited_vertices:
                     visited_vertices.add(vertex_to)
-                    self._shorten_path(self.__getitem__(vertex_to), None, visited_vertices)
+                    self._shorten_path(self[vertex_to], None, visited_vertices)
 
     def _get_shortened_null_paths(self, vertex):
         new_edges = defaultdict(set)
         reached_by_null_edges = set()
         self._shorten_path(vertex, None, reached_by_null_edges)
         for vertex_to in reached_by_null_edges:
-            for word in self.__getitem__(vertex_to).edges:
+            for word in self[vertex_to].edges:
                 if word is not None:
-                    new_edges[word] |= self.__getitem__(vertex_to).edges[word]
+                    new_edges[word] |= self[vertex_to].edges[word]
         return new_edges
 
     def _remove_null_edges(self):
@@ -111,13 +112,13 @@ class Automaton:
                 reached_by_null_edges = set()
                 self._shorten_path(vertex, None, reached_by_null_edges)
                 for terminal_vertex in reached_by_null_edges:
-                    vertex.is_terminal |= self.__getitem__(terminal_vertex).is_terminal
+                    vertex.is_terminal |= self[terminal_vertex].is_terminal
 
         new_edges = dict()
         for vertex_id, vertex in self.vertices.items():  # add new adges and delete null edges
             new_edges[vertex_id] = self._get_shortened_null_paths(vertex)
         for vertex_id, edges in new_edges.items():
-            vertex = self.__getitem__(vertex_id)
+            vertex = self[vertex_id]
             if None in vertex.edges:
                 del vertex.edges[None]
             for word, vertices_to in edges.items():
@@ -128,39 +129,46 @@ class Automaton:
             for vertex_to in neighbors:
                 if vertex_to not in visited:
                     visited.add(vertex_to)
-                    self._reachable_from_vertex(self.__getitem__(vertex_to), visited)
+                    self._reachable_from_vertex(self[vertex_to], visited)
 
-    def _remove_duplicate_edges(self):
-        new_automaton = Automaton(start=0, vertices=dict(), alphabet=set())
-        for subset in range(2**self._free_vertex_id):  # build automaton on subsets
-            for vertex_id, vertex in self.vertices.items():
+    def _init_from_automaton_subsets(self, other):
+        for subset in range(2**other._free_vertex_id):  # build automaton on subsets
+            for vertex_id, vertex in other.vertices.items():
                 if (2**vertex_id) & subset:
-                    if self.start == vertex_id and (2**vertex_id) == subset:
-                        new_automaton.start = subset
-                    new_automaton[subset].is_terminal |= vertex.is_terminal
+                    if other.start == vertex_id and (2**vertex_id) == subset:
+                        self.start = subset
+                    self[subset].is_terminal |= vertex.is_terminal
                     for word in vertex.edges:
-                        new_automaton[subset].edges[word] |= vertex.edges[word]
+                        self[subset].edges[word] |= vertex.edges[word]
 
-        for subset in range(2**(self._free_vertex_id)):
-            for word in new_automaton[subset].edges:
+    def _replace_edges_with_subsets(self):
+        for vertex in self.vertices:
+            for word in self[vertex].edges:
                 subset_to = 0
-                for vertex in new_automaton[subset].edges[word]:
-                    subset_to += 2**vertex
-                new_automaton[subset].edges[word] = {subset_to}
+                for vertex_to in self[vertex].edges[word]:
+                    subset_to += 2**vertex_to
+                self[vertex].edges[word] = {subset_to}
 
-        useful_vertices = {new_automaton.start}
-        new_automaton._reachable_from_vertex(new_automaton[new_automaton.start], useful_vertices)
-        new_useful_vertex_id = {old_vertex_id: new_vertex_id
-                                for new_vertex_id, old_vertex_id in enumerate(useful_vertices)}
+    def _init_from_useful_vertices(self, automaton):
+        useful_vertices = {automaton.start}
+        automaton._reachable_from_vertex(automaton[automaton.start], useful_vertices)
+        useful_vertex_id = {old_vertex_id: vertex_id
+                            for vertex_id, old_vertex_id in enumerate(useful_vertices)}
 
         self.vertices = dict()
         self._free_vertex_id = len(useful_vertices)
-        self.start = new_useful_vertex_id[new_automaton.start]
+        self.start = useful_vertex_id[automaton.start]
         for vertex in useful_vertices:
-            self.__getitem__(new_useful_vertex_id[vertex]).is_terminal |= new_automaton[vertex].is_terminal
-            for word, neighbors in new_automaton[vertex].edges.items():
+            self[useful_vertex_id[vertex]].is_terminal |= automaton[vertex].is_terminal
+            for word, neighbors in automaton[vertex].edges.items():
                 for vertex_to in neighbors:
-                    self.add_edge(new_useful_vertex_id[vertex], new_useful_vertex_id[vertex_to], word)
+                    self.add_edge(useful_vertex_id[vertex], useful_vertex_id[vertex_to], word)
+
+    def _remove_duplicate_edges(self):
+        new_automaton = Automaton(start=0, vertices=dict(), alphabet=set())
+        new_automaton._init_from_automaton_subsets(self)
+        new_automaton._replace_edges_with_subsets()
+        self._init_from_useful_vertices(new_automaton)
 
     def to_dfa(self):
         self._split_long_edges()
@@ -171,21 +179,22 @@ class Automaton:
         current_state = self.start
         for letter in word:
             try:
-                current_state = self.__getitem__(current_state).go(letter)
+                current_state = self[current_state].go(letter)
             except KeyError:
                 return False
-        return self.__getitem__(current_state).is_terminal
+        return self[current_state].is_terminal
 
     def to_cdfa(self):  # it is assumed that automaton is already deterministic
         missing_edges = []
+        Edge = namedtuple('Edge', 'vertex, letter')
         for vertex in self.vertices.values():
-            missing_edges += [(vertex, letter) for letter in self.alphabet if letter not in vertex.edges]
+            missing_edges += [Edge(vertex=vertex, letter=letter) for letter in self.alphabet if letter not in vertex.edges]
 
         if missing_edges:
             dummy_vertex = self._free_vertex_id
             self._free_vertex_id += 1
-            for vertex_from, letter in missing_edges:
-                self.add_edge(vertex_from.id, dummy_vertex, letter)
+            for edge in missing_edges:
+                self.add_edge(edge.vertex.id, dummy_vertex, edge.letter)
             for letter in self.alphabet:
                 self.add_edge(dummy_vertex, dummy_vertex, letter)
             self._free_vertex_id += 1
