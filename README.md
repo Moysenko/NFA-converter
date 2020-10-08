@@ -94,3 +94,10 @@ Automaton:
         From 3 to 4 by b
     Start state: 2    Terminal states: 1, 2, 3
 ```
+
+To run tests execute the following bash code in the repo directory:
+```shell
+coverage run -m unittest discover
+coverage html
+open htmlcov/index.html
+```
