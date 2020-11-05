@@ -43,7 +43,7 @@ class Automaton:
         for terminal_vertex_id in list(map(int, input('Terminal states: ').split())):
             self[terminal_vertex_id].is_terminal = True
 
-    def read_from_json(self, filename):
+    def read_from_file(self, filename):
         with open(filename, 'r') as input_file, open(os.devnull, 'w') as output_file:
             sys.stdin = input_file
             sys.stdout = output_file
